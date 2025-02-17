@@ -7,16 +7,16 @@ from io import BytesIO
 VIDEO_QUALITIES = ["144p", "240p", "360p", "480p", "720p", "1080p"]
 
 def download_video(url, quality):
-    """Downloads a YouTube video in the selected quality without merging."""
+    """Downloads a single MP4 file without requiring ffmpeg."""
     try:
         ydl_opts = {
-            'format': f'bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
+            'format': f'best[height<={quality}][ext=mp4]',  # Ensure a single MP4 file is selected
             'outtmpl': 'video.mp4',
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
-            'merge_output_format': 'mp4',  # Ensure MP4 output (No ffmpeg needed)
-            'postprocessors': [],  # Disable ffmpeg merging
+            'merge_output_format': 'mp4',  # No merging needed
+            'postprocessors': [],  # Disable any ffmpeg-related processing
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
