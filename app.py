@@ -1,52 +1,50 @@
 import streamlit as st
 import yt_dlp
-import base64
-from io import BytesIO
+import os
+import shutil
 
 # Video Quality Options
 VIDEO_QUALITIES = ["144p", "240p", "360p", "480p", "720p", "1080p"]
 
 def download_video(url, quality):
-    """Downloads a single MP4 file without requiring ffmpeg."""
+    """Downloads video and audio separately and merges them into one MP4 file."""
     try:
+        output_dir = "downloads"
+        os.makedirs(output_dir, exist_ok=True)  # Ensure directory exists
+
         ydl_opts = {
-            'format': f'best[height<={quality}][ext=mp4]',  # Ensure a single MP4 file is selected
-            'outtmpl': 'video.mp4',
+            'format': f'bestvideo[height<={quality}]+bestaudio/best',
+            'outtmpl': f'{output_dir}/%(id)s.%(ext)s',
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
-            'merge_output_format': 'mp4',  # No merging needed
-            'postprocessors': [],  # Disable any ffmpeg-related processing
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Referer': 'https://www.youtube.com/',
-            }
+            'merge_output_format': 'mp4',
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=False)  # Validate video
+            info_dict = ydl.extract_info(url, download=False)
+            video_id = info_dict['id']  # Get unique video ID
             ydl.download([url])
 
-        # Read video file into memory
-        with open("video.mp4", "rb") as f:
-            video_data = BytesIO(f.read())
+        # Get file names
+        video_file = next((f for f in os.listdir(output_dir) if f.startswith(video_id) and f.endswith(".mp4")), None)
+        audio_file = next((f for f in os.listdir(output_dir) if f.startswith(video_id) and f.endswith(".m4a")), None)
 
-        return video_data, "video.mp4"
+        # Merge manually if needed
+        final_file = f"{output_dir}/{video_id}_merged.mp4"
+        if video_file and audio_file:
+            with open(final_file, "wb") as merged:
+                with open(f"{output_dir}/{video_file}", "rb") as vf, open(f"{output_dir}/{audio_file}", "rb") as af:
+                    merged.write(vf.read())  # Write video
+                    merged.write(af.read())  # Append audio
 
-    except yt_dlp.utils.DownloadError as e:
-        return None, f"Download Error: {e}"
-    except yt_dlp.utils.ExtractorError as e:
-        return None, f"Extractor Error: {e}"
+            os.remove(f"{output_dir}/{video_file}")  # Remove original chunks
+            os.remove(f"{output_dir}/{audio_file}")
+
+        return final_file
+
     except Exception as e:
-        return None, f"Unexpected Error: {e}"
-
-def get_download_link(file_data, filename):
-    """Generates a download link for the video file."""
-    encoded_data = base64.b64encode(file_data.getvalue()).decode()
-    href = f'<a href="data:video/mp4;base64,{encoded_data}" download="{filename}">Click here to download</a>'
-    return href
+        return f"Error: {e}"
 
 def main():
     st.title("🎬 YouTube Video Downloader")
@@ -56,21 +54,15 @@ def main():
     if st.button("📥 Download"):
         if url:
             st.info("⏳ Downloading... Please wait.")
-            file_data, filename = download_video(url, quality)
+            file_path = download_video(url, quality)
 
-            if file_data:
-                st.success(f"✅ Downloaded: {filename}")
-                st.markdown(get_download_link(file_data, filename), unsafe_allow_html=True)
+            if os.path.exists(file_path):
+                st.success("✅ Download Complete!")
+                st.markdown(f"📥 [Download Video]({file_path})", unsafe_allow_html=True)
             else:
-                st.error(f"❌ {filename}")  # Display error message
+                st.error("❌ Download Failed.")
         else:
             st.warning("⚠️ Please enter a valid YouTube URL.")
-
-    if st.button("▶️ View Video"):
-        if url:
-            st.video(url)
-        else:
-            st.warning("⚠️ Enter a valid YouTube URL to preview.")
 
 if __name__ == "__main__":
     main()
